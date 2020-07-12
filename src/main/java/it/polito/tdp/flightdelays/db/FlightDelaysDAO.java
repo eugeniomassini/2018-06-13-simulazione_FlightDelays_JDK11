@@ -7,9 +7,16 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.lang.Object;
+
+import com.javadocmd.simplelatlng.LatLng;
+import com.javadocmd.simplelatlng.LatLngTool;
+import com.javadocmd.simplelatlng.util.LengthUnit;
 
 import it.polito.tdp.flightdelays.model.Airline;
 import it.polito.tdp.flightdelays.model.Airport;
+import it.polito.tdp.flightdelays.model.Arco;
 import it.polito.tdp.flightdelays.model.Flight;
 
 public class FlightDelaysDAO {
@@ -61,6 +68,32 @@ public class FlightDelaysDAO {
 			throw new RuntimeException("Error Connection Database");
 		}
 	}
+	
+	public List<Airport> loadAllAirports(Map<String, Airport> idMap) {
+		String sql = "SELECT id, airport, city, state, country, latitude, longitude FROM airports";
+		List<Airport> result = new ArrayList<Airport>();
+		
+		try {
+			Connection conn = DBConnect.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			ResultSet rs = st.executeQuery();
+
+			while (rs.next()) {
+				Airport airport = new Airport(rs.getString("id"), rs.getString("airport"), rs.getString("city"),
+						rs.getString("state"), rs.getString("country"), rs.getDouble("latitude"), rs.getDouble("longitude"));
+				result.add(airport);
+				idMap.put(airport.getId(), airport);
+			}
+			
+			conn.close();
+			return result;
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.out.println("Errore connessione al database");
+			throw new RuntimeException("Error Connection Database");
+		}
+	}
 
 	public List<Flight> loadAllFlights() {
 		String sql = "SELECT id, airline, flight_number, origin_airport_id, destination_airport_id, scheduled_dep_date, "
@@ -84,6 +117,42 @@ public class FlightDelaysDAO {
 			conn.close();
 			return result;
 
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.out.println("Errore connessione al database");
+			throw new RuntimeException("Error Connection Database");
+		}
+	}
+
+	public List<Arco> getArchi(Airline airline, Map<String, Airport> idMap) {
+		String sql = "select `ORIGIN_AIRPORT_ID` as origine, `DESTINATION_AIRPORT_ID` as arrivo, avg(`ARRIVAL_DELAY`) as media " + 
+				"from flights " + 
+				"where airline_id= ? " + 
+				"group by `ORIGIN_AIRPORT_ID`, `DESTINATION_AIRPORT_ID`";
+		List<Arco> result = new ArrayList<Arco>();
+		
+		try {
+			Connection conn = DBConnect.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setString(1, airline.getId());
+			
+			ResultSet rs = st.executeQuery();
+
+			while (rs.next()) {
+				Arco arco = new Arco(idMap.get(rs.getString("origine")), idMap.get(rs.getString("arrivo")), 0.0);
+				
+				Double peso = rs.getDouble("media")/LatLngTool.distance(
+						new LatLng(arco.getA1().getLatitude(), arco.getA1().getLongitude()), 
+						new LatLng(arco.getA2().getLatitude(), arco.getA2().getLongitude()), LengthUnit.KILOMETER);
+				
+				arco.setPeso(peso);
+				
+				result.add(arco);
+			}
+			
+			conn.close();
+			return result;
+			
 		} catch (SQLException e) {
 			e.printStackTrace();
 			System.out.println("Errore connessione al database");
